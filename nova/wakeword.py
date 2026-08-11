@@ -1,17 +1,13 @@
 import sounddevice as sd
 
-from .audio import FRAME_SAMPLES, SAMPLE_RATE, apply_gain
+from .audio import FRAME_SAMPLES, SAMPLE_RATE, get_stream_kwargs
 
 WAKE_WORD = "hey_jarvis"
-# 0.5 (the common default) was too strict on a real voice through a built-in mic —
-# a clearly-enunciated "Hey Jarvis" during testing scored 0.469, but normal
-# conversational volume scored lower still (required near-shouting at 0.3).
-# Digital gain didn't help — a clean signal scaled to 12% amplitude still scored
-# 0.999, so amplitude alone isn't the bottleneck; more likely background noise or
-# natural speech being less crisp than deliberate test speech. Lowered further as
-# the one lever with direct supporting data. speexdsp noise suppression (the more
-# principled fix) has no Windows wheel and doesn't support Python 3.14 — not
-# usable here.
+# Real root cause of needing to shout: sounddevice's global default input device
+# resolved to the MME variant of the mic, which skips WASAPI-level driver
+# processing (array beamforming, AGC) — see get_input_device() in audio.py.
+# Threshold stays lowered from the 0.5 default pending a retest on WASAPI, which
+# should score real speech much closer to the ~0.99 seen on synthetic TTS audio.
 THRESHOLD = 0.2
 
 _model = None
@@ -29,15 +25,18 @@ def _get_model():
 
 
 def wait_for_wake_word() -> None:
-    """Block until the wake word is heard on the default microphone."""
+    """Block until the wake word is heard on the microphone."""
     model = _get_model()
     with sd.InputStream(
-        samplerate=SAMPLE_RATE, channels=1, dtype="int16", blocksize=FRAME_SAMPLES
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="int16",
+        blocksize=FRAME_SAMPLES,
+        **get_stream_kwargs(),
     ) as stream:
         while True:
             frame, _ = stream.read(FRAME_SAMPLES)
-            frame = apply_gain(frame[:, 0])
-            prediction = model.predict(frame)
+            prediction = model.predict(frame[:, 0])
             if prediction.get(WAKE_WORD, 0.0) > THRESHOLD:
                 model.reset()
                 return

@@ -12,30 +12,65 @@ SILENCE_MS = 1200
 MIN_SPEECH_MS = 300
 MAX_RECORD_SECONDS = 12
 
-# Some mics/devices (e.g. a laptop's built-in array at default Windows input level)
-# capture normal speech far quieter than what the wake word model and silence
-# detector were tuned against — requiring the user to nearly shout. Boost quiet
-# frames toward a target peak instead of chasing this with an ever-lower threshold.
-GAIN_TARGET_PEAK = 12000.0
-GAIN_MAX = 6.0
-GAIN_NOISE_FLOOR = 50  # skip near-silence — don't amplify mic hiss into false energy
+_input_device = None
+_input_device_is_wasapi = False
 
 
-def apply_gain(frame: np.ndarray) -> np.ndarray:
-    """Boost a mono int16 frame toward GAIN_TARGET_PEAK if it's quieter than that,
-    capped at GAIN_MAX to avoid amplifying silence/noise into false triggers."""
-    peak = float(np.abs(frame).max())
-    if peak < GAIN_NOISE_FLOOR:
-        return frame
-    gain = min(GAIN_MAX, GAIN_TARGET_PEAK / peak)
-    if gain <= 1.0:
-        return frame
-    amplified = frame.astype(np.float32) * gain
-    return np.clip(amplified, -32768, 32767).astype(np.int16)
+def get_input_device():
+    """Prefer the WASAPI variant of the default input device. sounddevice's
+    global default on this machine resolved to the MME variant, which bypasses
+    driver-level mic processing (array beamforming, automatic gain control) that
+    WASAPI-based apps (browsers, etc.) get — this made normal speaking volume
+    far too quiet to work with. Falls back to the system default if no WASAPI
+    input device is found (e.g. non-Windows)."""
+    global _input_device, _input_device_is_wasapi
+    if _input_device is not None:
+        return _input_device
+
+    hostapis = sd.query_hostapis()
+    wasapi_index = next(
+        (i for i, api in enumerate(hostapis) if api["name"] == "Windows WASAPI"), None
+    )
+    if wasapi_index is None:
+        _input_device = sd.default.device[0]
+        return _input_device
+
+    devices = sd.query_devices()
+    default_name = devices[sd.default.device[0]]["name"]
+
+    # Same physical mic, WASAPI variant, if it exists
+    for i, d in enumerate(devices):
+        if d["hostapi"] == wasapi_index and d["max_input_channels"] > 0 and d["name"] == default_name:
+            _input_device = i
+            _input_device_is_wasapi = True
+            return _input_device
+
+    # Otherwise any WASAPI input device
+    for i, d in enumerate(devices):
+        if d["hostapi"] == wasapi_index and d["max_input_channels"] > 0:
+            _input_device = i
+            _input_device_is_wasapi = True
+            return _input_device
+
+    _input_device = sd.default.device[0]
+    return _input_device
+
+
+def get_stream_kwargs() -> dict:
+    """Extra kwargs for sd.InputStream(): pins the chosen device and, for WASAPI,
+    enables auto_convert. Without it, WASAPI shared-mode streams reject any
+    samplerate that doesn't match the device's own mix format (e.g. 48kHz) —
+    opening at our SAMPLE_RATE (16kHz) raises `PortAudioError: Invalid sample
+    rate` otherwise."""
+    get_input_device()  # populate _input_device / _input_device_is_wasapi
+    kwargs = {"device": _input_device}
+    if _input_device_is_wasapi:
+        kwargs["extra_settings"] = sd.WasapiSettings(auto_convert=True)
+    return kwargs
 
 
 def record_until_silence() -> np.ndarray:
-    """Record mono int16 audio at SAMPLE_RATE from the default microphone until
+    """Record mono int16 audio at SAMPLE_RATE from the microphone until
     SILENCE_MS of low-energy audio follows some detected speech, or
     MAX_RECORD_SECONDS elapses. Returns an empty array if nothing was captured."""
     silence_frames_needed = int(SILENCE_MS / _FRAME_MS)
@@ -47,11 +82,15 @@ def record_until_silence() -> np.ndarray:
     silence_run = 0
 
     with sd.InputStream(
-        samplerate=SAMPLE_RATE, channels=1, dtype="int16", blocksize=FRAME_SAMPLES
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="int16",
+        blocksize=FRAME_SAMPLES,
+        **get_stream_kwargs(),
     ) as stream:
         for _ in range(max_frames):
             frame, _ = stream.read(FRAME_SAMPLES)
-            frame = apply_gain(frame[:, 0])
+            frame = frame[:, 0]
             frames.append(frame)
 
             rms = float(np.sqrt(np.mean(frame.astype(np.float32) ** 2)))

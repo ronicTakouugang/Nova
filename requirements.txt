@@ -1,12 +1,15 @@
 anthropic
 python-dotenv
 chromadb
-torch
-torchaudio
-coqui-tts[codec]
+piper-tts==1.6.0
+# XTTS-v2 — optional, higher-quality but ~11x slower on CPU (NOVA_TTS_BACKEND=xtts).
+# Not installed by default; see README before enabling.
+# torch
+# torchaudio
+# coqui-tts[codec]
 # coqui-tts has no upper bound on transformers; 5.x removed an internal API
 # it still relies on (isin_mps_friendly). Pin until upstream catches up.
-transformers==4.57.6
+# transformers==4.57.6
 sounddevice==0.5.5
 openwakeword==0.6.0
 faster-whisper==1.2.1
