@@ -20,3 +20,6 @@ VOICE_ENABLED = os.getenv("NOVA_VOICE", "on").lower() not in ("off", "0", "false
 
 # Set NOVA_CODE_EXEC=off to remove Nova's ability to run code entirely.
 CODE_EXEC_ENABLED = os.getenv("NOVA_CODE_EXEC", "on").lower() not in ("off", "0", "false")
+
+# Set NOVA_WEB_SEARCH=off to remove Nova's ability to search the web.
+WEB_SEARCH_ENABLED = os.getenv("NOVA_WEB_SEARCH", "on").lower() not in ("off", "0", "false")

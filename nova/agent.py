@@ -4,11 +4,12 @@ import anthropic
 
 from .audio import record_until_silence
 from .code_exec import RUN_PYTHON_TOOL, run_python
-from .config import CODE_EXEC_ENABLED, MODEL
+from .config import CODE_EXEC_ENABLED, MODEL, WEB_SEARCH_ENABLED
 from .memory import recall, remember
 from .stt import transcribe
 from .tts import speak
 from .wakeword import wait_for_wake_word
+from .web_search import WEB_SEARCH_TOOL
 
 if sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -25,6 +26,10 @@ ou une décision qui vaut la peine d'être retenue pour les prochaines conversat
 Utilise l'outil `run_python` pour les calculs, manipulations de fichiers ou toute tâche \
 qu'un script Python peut accomplir. L'utilisateur doit confirmer chaque exécution — \
 c'est normal, ne le présente pas comme une erreur.
+
+Utilise `web_search` quand la réponse dépend d'informations récentes ou que tu n'es \
+pas sûr (actualités, météo, prix, événements récents) plutôt que de répondre depuis \
+tes connaissances — ne demande pas la permission, cherche directement.
 
 Souvenirs pertinents pour cette conversation :
 {memory}
@@ -54,6 +59,8 @@ def build_tools() -> list[dict]:
     tools = [REMEMBER_TOOL]
     if CODE_EXEC_ENABLED:
         tools.append(RUN_PYTHON_TOOL)
+    if WEB_SEARCH_ENABLED:
+        tools.append(WEB_SEARCH_TOOL)
     return tools
 
 
