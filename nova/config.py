@@ -17,3 +17,6 @@ MODEL = "claude-opus-5"
 
 # Set NOVA_VOICE=off to run text-only (no synthesis, no playback).
 VOICE_ENABLED = os.getenv("NOVA_VOICE", "on").lower() not in ("off", "0", "false")
+
+# Set NOVA_CODE_EXEC=off to remove Nova's ability to run code entirely.
+CODE_EXEC_ENABLED = os.getenv("NOVA_CODE_EXEC", "on").lower() not in ("off", "0", "false")
