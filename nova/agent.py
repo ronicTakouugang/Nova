@@ -4,6 +4,7 @@ import anthropic
 
 from .config import MODEL
 from .memory import recall, remember
+from .tts import speak
 
 if sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -72,6 +73,7 @@ def chat() -> None:
         messages.append({"role": "user", "content": user_input})
         relevant_memories = recall(user_input)
 
+        final_text = ""
         while True:
             with client.messages.stream(
                 model=MODEL,
@@ -82,10 +84,13 @@ def chat() -> None:
                 messages=messages,
             ) as stream:
                 print("Nova > ", end="", flush=True)
+                chunks = []
                 for text in stream.text_stream:
                     print(text, end="", flush=True)
+                    chunks.append(text)
                 print()
                 response = stream.get_final_message()
+            final_text = "".join(chunks)
 
             messages.append({"role": "assistant", "content": response.content})
 
@@ -104,6 +109,8 @@ def chat() -> None:
                         }
                     )
             messages.append({"role": "user", "content": tool_results})
+
+        speak(final_text)
 
 
 if __name__ == "__main__":
