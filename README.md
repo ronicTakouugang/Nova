@@ -56,10 +56,16 @@ réveil et la transcription tournent localement.
   ça au niveau applicatif (pas de modification système) — voir `_disable_hf_symlinks`.
 - Détection de silence maison dans `nova/audio.py` (seuil RMS) pour savoir quand couper
   l'enregistrement — pas de VAD sophistiqué pour l'instant.
-- Seuil de déclenchement du mot de réveil (`nova/wakeword.py`) abaissé à 0.3 (au lieu du
-  0.5 par défaut) après mesure sur une vraie voix via micro intégré — une voix humaine
-  scorait naturellement plus bas (~0.47) que la synthèse TTS utilisée pour les premiers
-  tests (~0.99). À remonter si des déclenchements intempestifs apparaissent.
+- Seuil de déclenchement du mot de réveil (`nova/wakeword.py`) abaissé à 0.2 (au lieu du
+  0.5 par défaut). À volume de parole normal, le score reste nettement plus bas que sur
+  de la synthèse TTS (~0.99) ou même une élocution volontairement claire pendant les
+  tests (~0.47) — d'où le besoin de crier avant ce réglage. Un gain logiciel a été
+  testé (`apply_gain` dans `nova/audio.py`) mais n'a pas changé le score sur un signal
+  propre atténué : l'amplitude seule n'explique pas l'écart, plus probablement le bruit
+  de fond ou une élocution naturelle moins "nette" que pendant les tests. La suppression
+  de bruit intégrée à openWakeWord (`speexdsp_ns`) n'a pas de wheel Windows et ne
+  supporte pas Python 3.14 — pas utilisable ici. À remonter si des déclenchements
+  intempestifs apparaissent.
 
 ## Feuille de route
 

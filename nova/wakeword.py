@@ -1,12 +1,18 @@
 import sounddevice as sd
 
-from .audio import FRAME_SAMPLES, SAMPLE_RATE
+from .audio import FRAME_SAMPLES, SAMPLE_RATE, apply_gain
 
 WAKE_WORD = "hey_jarvis"
 # 0.5 (the common default) was too strict on a real voice through a built-in mic —
-# a genuine "Hey Jarvis" from the user only scored 0.469. Lowered after measuring
-# real utterances; revisit if false triggers become a problem.
-THRESHOLD = 0.3
+# a clearly-enunciated "Hey Jarvis" during testing scored 0.469, but normal
+# conversational volume scored lower still (required near-shouting at 0.3).
+# Digital gain didn't help — a clean signal scaled to 12% amplitude still scored
+# 0.999, so amplitude alone isn't the bottleneck; more likely background noise or
+# natural speech being less crisp than deliberate test speech. Lowered further as
+# the one lever with direct supporting data. speexdsp noise suppression (the more
+# principled fix) has no Windows wheel and doesn't support Python 3.14 — not
+# usable here.
+THRESHOLD = 0.2
 
 _model = None
 
@@ -30,7 +36,8 @@ def wait_for_wake_word() -> None:
     ) as stream:
         while True:
             frame, _ = stream.read(FRAME_SAMPLES)
-            prediction = model.predict(frame[:, 0])
+            frame = apply_gain(frame[:, 0])
+            prediction = model.predict(frame)
             if prediction.get(WAKE_WORD, 0.0) > THRESHOLD:
                 model.reset()
                 return

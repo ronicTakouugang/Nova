@@ -12,6 +12,27 @@ SILENCE_MS = 1200
 MIN_SPEECH_MS = 300
 MAX_RECORD_SECONDS = 12
 
+# Some mics/devices (e.g. a laptop's built-in array at default Windows input level)
+# capture normal speech far quieter than what the wake word model and silence
+# detector were tuned against — requiring the user to nearly shout. Boost quiet
+# frames toward a target peak instead of chasing this with an ever-lower threshold.
+GAIN_TARGET_PEAK = 12000.0
+GAIN_MAX = 6.0
+GAIN_NOISE_FLOOR = 50  # skip near-silence — don't amplify mic hiss into false energy
+
+
+def apply_gain(frame: np.ndarray) -> np.ndarray:
+    """Boost a mono int16 frame toward GAIN_TARGET_PEAK if it's quieter than that,
+    capped at GAIN_MAX to avoid amplifying silence/noise into false triggers."""
+    peak = float(np.abs(frame).max())
+    if peak < GAIN_NOISE_FLOOR:
+        return frame
+    gain = min(GAIN_MAX, GAIN_TARGET_PEAK / peak)
+    if gain <= 1.0:
+        return frame
+    amplified = frame.astype(np.float32) * gain
+    return np.clip(amplified, -32768, 32767).astype(np.int16)
+
 
 def record_until_silence() -> np.ndarray:
     """Record mono int16 audio at SAMPLE_RATE from the default microphone until
@@ -30,7 +51,7 @@ def record_until_silence() -> np.ndarray:
     ) as stream:
         for _ in range(max_frames):
             frame, _ = stream.read(FRAME_SAMPLES)
-            frame = frame[:, 0]
+            frame = apply_gain(frame[:, 0])
             frames.append(frame)
 
             rms = float(np.sqrt(np.mean(frame.astype(np.float32) ** 2)))
