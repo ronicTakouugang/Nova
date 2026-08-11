@@ -7,3 +7,6 @@ coqui-tts[codec]
 # coqui-tts has no upper bound on transformers; 5.x removed an internal API
 # it still relies on (isin_mps_friendly). Pin until upstream catches up.
 transformers==4.57.6
+sounddevice
+openwakeword
+faster-whisper
