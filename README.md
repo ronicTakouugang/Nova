@@ -28,12 +28,17 @@ python main.py                # mode texte (clavier)
 python main.py --voice        # mode voix (micro + "Hey Jarvis")
 ```
 
-Au premier lancement, plusieurs modèles se téléchargent une fois (puis tout tourne
-hors-ligne) :
+Au premier lancement, plusieurs modèles se téléchargent une fois (puis les composants
+voix/mémoire tournent hors-ligne) :
 - ChromaDB : ~80 Mo (embeddings mémoire)
 - XTTS-v2 : ~1,8 Go (voix sortante ; licence CPML acceptée automatiquement)
 - openWakeWord : ~7 Mo (mot de réveil "Hey Jarvis")
 - faster-whisper : ~500 Mo (modèle `small`, reconnaissance vocale)
+
+**Ce qui n'est jamais hors-ligne** : chaque tour de conversation part vers l'API Claude
+(`client.messages.stream`, dans `nova/agent.py`) — ça demande une connexion réseau et
+`ANTHROPIC_API_KEY` à chaque fois. Seuls la mémoire, la synthèse vocale, le mot de
+réveil et la transcription tournent localement.
 
 ### Notes techniques
 
@@ -51,6 +56,10 @@ hors-ligne) :
   ça au niveau applicatif (pas de modification système) — voir `_disable_hf_symlinks`.
 - Détection de silence maison dans `nova/audio.py` (seuil RMS) pour savoir quand couper
   l'enregistrement — pas de VAD sophistiqué pour l'instant.
+- Seuil de déclenchement du mot de réveil (`nova/wakeword.py`) abaissé à 0.3 (au lieu du
+  0.5 par défaut) après mesure sur une vraie voix via micro intégré — une voix humaine
+  scorait naturellement plus bas (~0.47) que la synthèse TTS utilisée pour les premiers
+  tests (~0.99). À remonter si des déclenchements intempestifs apparaissent.
 
 ## Feuille de route
 

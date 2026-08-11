@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import sounddevice as sd
 
@@ -16,7 +18,7 @@ def record_until_silence() -> np.ndarray:
     SILENCE_MS of low-energy audio follows some detected speech, or
     MAX_RECORD_SECONDS elapses. Returns an empty array if nothing was captured."""
     silence_frames_needed = int(SILENCE_MS / _FRAME_MS)
-    min_speech_frames = int(MIN_SPEECH_MS / _FRAME_MS)
+    min_speech_frames = math.ceil(MIN_SPEECH_MS / _FRAME_MS)
     max_frames = int(MAX_RECORD_SECONDS * 1000 / _FRAME_MS)
 
     frames = []
@@ -41,4 +43,7 @@ def record_until_silence() -> np.ndarray:
             if speech_frames >= min_speech_frames and silence_run >= silence_frames_needed:
                 break
 
-    return np.concatenate(frames) if frames else np.empty(0, dtype=np.int16)
+    if speech_frames < min_speech_frames:
+        return np.empty(0, dtype=np.int16)
+
+    return np.concatenate(frames)

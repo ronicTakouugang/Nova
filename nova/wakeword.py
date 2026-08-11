@@ -3,7 +3,10 @@ import sounddevice as sd
 from .audio import FRAME_SAMPLES, SAMPLE_RATE
 
 WAKE_WORD = "hey_jarvis"
-THRESHOLD = 0.5
+# 0.5 (the common default) was too strict on a real voice through a built-in mic —
+# a genuine "Hey Jarvis" from the user only scored 0.469. Lowered after measuring
+# real utterances; revisit if false triggers become a problem.
+THRESHOLD = 0.3
 
 _model = None
 
