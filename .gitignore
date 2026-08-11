@@ -4,3 +4,5 @@ __pycache__/
 .env
 memory/
 .piper_voices/
+gmail_credentials.json
+.gmail_token.json
