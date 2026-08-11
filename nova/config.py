@@ -23,3 +23,7 @@ CODE_EXEC_ENABLED = os.getenv("NOVA_CODE_EXEC", "on").lower() not in ("off", "0"
 
 # Set NOVA_WEB_SEARCH=off to remove Nova's ability to search the web.
 WEB_SEARCH_ENABLED = os.getenv("NOVA_WEB_SEARCH", "on").lower() not in ("off", "0", "false")
+
+# Set NOVA_GMAIL=off to remove Gmail tools even if credentials are present.
+# Tools are only actually offered once gmail_credentials.json exists — see nova/gmail.py.
+GMAIL_ENABLED = os.getenv("NOVA_GMAIL", "on").lower() not in ("off", "0", "false")

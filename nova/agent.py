@@ -4,7 +4,10 @@ import anthropic
 
 from .audio import record_until_silence
 from .code_exec import RUN_PYTHON_TOOL, run_python
-from .config import CODE_EXEC_ENABLED, MODEL, WEB_SEARCH_ENABLED
+from .config import CODE_EXEC_ENABLED, GMAIL_ENABLED, MODEL, WEB_SEARCH_ENABLED
+from .gmail import LIST_EMAILS_TOOL, READ_EMAIL_TOOL
+from .gmail import is_configured as gmail_configured
+from .gmail import list_emails, read_email
 from .memory import recall, remember
 from .stt import transcribe
 from .tts import speak
@@ -20,16 +23,7 @@ direct, compétent, un peu de personnalité, jamais bavard pour rien.
 
 Réponds en français sauf si on te parle dans une autre langue.
 
-Utilise l'outil `remember` quand l'utilisateur partage une préférence, un fait durable \
-ou une décision qui vaut la peine d'être retenue pour les prochaines conversations.
-
-Utilise l'outil `run_python` pour les calculs, manipulations de fichiers ou toute tâche \
-qu'un script Python peut accomplir. L'utilisateur doit confirmer chaque exécution — \
-c'est normal, ne le présente pas comme une erreur.
-
-Utilise `web_search` quand la réponse dépend d'informations récentes ou que tu n'es \
-pas sûr (actualités, météo, prix, événements récents) plutôt que de répondre depuis \
-tes connaissances — ne demande pas la permission, cherche directement.
+{tool_notes}
 
 Souvenirs pertinents pour cette conversation :
 {memory}
@@ -55,13 +49,46 @@ REMEMBER_TOOL = {
 }
 
 
+_GMAIL_ACTIVE = GMAIL_ENABLED and gmail_configured()
+
+
 def build_tools() -> list[dict]:
     tools = [REMEMBER_TOOL]
     if CODE_EXEC_ENABLED:
         tools.append(RUN_PYTHON_TOOL)
     if WEB_SEARCH_ENABLED:
         tools.append(WEB_SEARCH_TOOL)
+    if _GMAIL_ACTIVE:
+        tools.extend([LIST_EMAILS_TOOL, READ_EMAIL_TOOL])
     return tools
+
+
+def build_tool_notes() -> str:
+    notes = [
+        "Utilise l'outil `remember` quand l'utilisateur partage une préférence, un fait "
+        "durable ou une décision qui vaut la peine d'être retenue pour les prochaines "
+        "conversations."
+    ]
+    if CODE_EXEC_ENABLED:
+        notes.append(
+            "Utilise l'outil `run_python` pour les calculs, manipulations de fichiers ou "
+            "toute tâche qu'un script Python peut accomplir. L'utilisateur doit confirmer "
+            "chaque exécution — c'est normal, ne le présente pas comme une erreur."
+        )
+    if WEB_SEARCH_ENABLED:
+        notes.append(
+            "Utilise `web_search` quand la réponse dépend d'informations récentes ou que tu "
+            "n'es pas sûr (actualités, météo, prix, événements récents) plutôt que de "
+            "répondre depuis tes connaissances — ne demande pas la permission, cherche "
+            "directement."
+        )
+    if _GMAIL_ACTIVE:
+        notes.append(
+            "Utilise `list_emails` puis `read_email` pour consulter la boîte mail de "
+            "l'utilisateur — par exemple avec la requête Gmail 'is:important is:unread' "
+            "pour les emails importants non lus, ou 'newer_than:1d' pour ceux du jour."
+        )
+    return "\n\n".join(notes)
 
 
 def build_system_prompt(relevant_memories: list[str]) -> str:
@@ -69,7 +96,7 @@ def build_system_prompt(relevant_memories: list[str]) -> str:
         memory = "\n".join(f"- {m}" for m in relevant_memories)
     else:
         memory = "(aucun souvenir pertinent pour cette conversation)"
-    return SYSTEM_PROMPT_TEMPLATE.format(memory=memory)
+    return SYSTEM_PROMPT_TEMPLATE.format(tool_notes=build_tool_notes(), memory=memory)
 
 
 def run_tool(name: str, tool_input: dict) -> str:
@@ -78,6 +105,10 @@ def run_tool(name: str, tool_input: dict) -> str:
         return "Noté."
     if name == "run_python":
         return run_python(tool_input["code"], tool_input["purpose"])
+    if name == "list_emails":
+        return list_emails(tool_input.get("query", ""), tool_input.get("max_results", 10))
+    if name == "read_email":
+        return read_email(tool_input["message_id"])
     return f"Outil inconnu : {name}"
 
 
