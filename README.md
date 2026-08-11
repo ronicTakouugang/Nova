@@ -4,10 +4,11 @@ Assistant personnel façon Jarvis. Nova vise, à terme, la voix (réveil + écou
 la mémoire long terme, le contrôle d'outils réels (domotique, code, web) et une interface
 HUD — construits couche par couche, chaque phase validée avant la suivante.
 
-## État actuel : Phase 3 — voix entrante
+## État actuel : Phase 4 — les mains (exécution de code)
 
 Un agent conversationnel propulsé par Claude, avec mémoire sémantique (ChromaDB), voix
-sortante locale (Piper) et voix entrante : mot de réveil + reconnaissance vocale.
+sortante locale (Piper), voix entrante (mot de réveil + reconnaissance vocale), et
+maintenant la capacité d'exécuter du code Python pour agir réellement.
 
 - **Mémoire** : `remember`/`recall` sémantiques ; journal lisible dans `memory/notes.md`.
 - **Voix sortante** : Piper (local, rapide — ~6s pour une réponse courte, pas de GPU
@@ -16,7 +17,11 @@ sortante locale (Piper) et voix entrante : mot de réveil + reconnaissance vocal
 - **Voix entrante** : dis **"Hey Jarvis"** pour réveiller Nova (openWakeWord), puis parle
   — elle enregistre jusqu'à ce que tu t'arrêtes (silence détecté) et transcrit avec
   faster-whisper (modèle `small`, local, français).
-- ElevenLabs reste une option future non branchée (nécessite une clé API payante).
+- **Exécution de code** : Nova peut écrire et exécuter du Python (`run_python`) pour des
+  calculs, manipulations de fichiers, etc. **Aucune sandbox** — le code tourne avec les
+  mêmes droits qu'elle-même — donc chaque exécution demande une confirmation explicite
+  dans le terminal avant de tourner. `NOVA_CODE_EXEC=off` pour désactiver entièrement.
+- ElevenLabs, Home Assistant et les serveurs MCP restent des options futures non branchées.
 
 ### Lancer Nova
 
@@ -56,22 +61,40 @@ cette vitesse une réponse de 100+ mots prend plusieurs minutes — inutilisable
 conversation. Piper est le défaut pour que la voix reste réactive ; XTTS-v2 reste une
 option pour qui a un GPU ou n'est pas pressé.
 
+### Problèmes connus (voix, non résolus)
+
+- **Le mot de réveil entend encore mal une vraie voix**, même après avoir corrigé deux
+  causes réelles confirmées (voir Notes techniques ci-dessous : MME au lieu de WASAPI,
+  puis un plantage `PortAudioError` une fois passé sur WASAPI). Reste possible : le
+  modèle pré-entraîné `hey_jarvis` d'openWakeWord n'est peut-être simplement pas robuste
+  à un accent non natif, indépendamment de la qualité audio.
+- **La latence perçue reste notable** même après le passage à Piper (~11x plus rapide
+  que XTTS-v2) : ~12-14s par tour en régime établi. Une bonne partie est le temps réel
+  de prononcer la réponse à voix haute plus la latence normale de l'API Claude — pas
+  clairement un bug à ce stade.
+
+Les deux ont été mis de côté volontairement pour avancer sur la Phase 4 — à reprendre.
+
 ### Notes techniques
 
+- **Sécurité de `run_python`** : aucune sandbox, aucune restriction de dossier — le seul
+  garde-fou est la confirmation manuelle avant chaque exécution (`nova/code_exec.py`).
+  Ne pas confirmer un code dont l'effet n'est pas clair. Timeout de 30s, sortie tronquée
+  à 3000 caractères.
 - **Le micro par défaut de Windows n'est pas forcément le bon** : sur cette machine,
   `sounddevice`/PortAudio résolvait le périphérique par défaut vers la variante **MME**
   du micro (l'API audio la plus ancienne de Windows), qui contourne le traitement DSP
   au niveau pilote (formation de faisceau du réseau de micros, gain automatique) que
-  les apps modernes (navigateurs, etc.) obtiennent via **WASAPI**. Résultat : il fallait
-  presque crier pour être entendu, alors que le micro fonctionnait normalement dans
-  d'autres applications. `nova/audio.py` (`get_input_device`) sélectionne maintenant
-  explicitement la variante WASAPI du périphérique par défaut.
-- Un gain logiciel (`apply_gain`) avait été tenté avant de trouver la vraie cause —
+  les apps modernes (navigateurs, etc.) obtiennent via **WASAPI**. `nova/audio.py`
+  (`get_input_device`) sélectionne maintenant explicitement la variante WASAPI. Ça a
+  révélé un second bug : WASAPI en mode partagé refuse un taux d'échantillonnage qui ne
+  correspond pas à celui du périphérique (48kHz natif vs nos 16kHz demandés) — corrigé
+  avec `WasapiSettings(auto_convert=True)`.
+- Un gain logiciel (`apply_gain`) avait été tenté avant de trouver la cause ci-dessus —
   supprimé : sur un signal propre atténué à 12%, le score de détection ne changeait pas
   (0.999 → 0.999), donc l'amplitude seule n'expliquait pas le problème.
 - Seuil de déclenchement du mot de réveil (`nova/wakeword.py`) laissé à 0.2 (au lieu du
-  0.5 par défaut) en attendant un nouveau test avec le bon périphérique — à remonter si
-  ça déclenche sur autre chose que "Hey Jarvis".
+  0.5 par défaut) — à remonter si ça déclenche sur autre chose que "Hey Jarvis".
 - `coqui-tts` (XTTS-v2, optionnel) ne fixe pas de plafond sur `transformers` ; la 5.x
   casse une API interne encore utilisée → épingler `transformers==4.57.6` si tu actives
   ce backend. PyTorch récent (2.9+) nécessite aussi `torchcodec` (`coqui-tts[codec]`).
@@ -93,6 +116,6 @@ option pour qui a un GPU ou n'est pas pressé.
 - [x] **Phase 1** — Mémoire vectorielle (ChromaDB)
 - [x] **Phase 2** — Voix sortante (Piper local ; XTTS-v2 et ElevenLabs en options)
 - [x] **Phase 3** — Voix entrante (wake word "Hey Jarvis" + faster-whisper)
-- [ ] **Phase 4** — Les mains (MCP, domotique, exécution de code)
+- [x] **Phase 4** — Les mains : exécution de code (`run_python`, avec confirmation)
 - [ ] **Phase 5** — Interface HUD (Electron/Tauri)
 - [ ] **Phase 6** — Orchestration temps réel avec interruption (LiveKit/Pipecat)

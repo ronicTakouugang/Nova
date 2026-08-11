@@ -3,7 +3,8 @@ import sys
 import anthropic
 
 from .audio import record_until_silence
-from .config import MODEL
+from .code_exec import RUN_PYTHON_TOOL, run_python
+from .config import CODE_EXEC_ENABLED, MODEL
 from .memory import recall, remember
 from .stt import transcribe
 from .tts import speak
@@ -20,6 +21,10 @@ Réponds en français sauf si on te parle dans une autre langue.
 
 Utilise l'outil `remember` quand l'utilisateur partage une préférence, un fait durable \
 ou une décision qui vaut la peine d'être retenue pour les prochaines conversations.
+
+Utilise l'outil `run_python` pour les calculs, manipulations de fichiers ou toute tâche \
+qu'un script Python peut accomplir. L'utilisateur doit confirmer chaque exécution — \
+c'est normal, ne le présente pas comme une erreur.
 
 Souvenirs pertinents pour cette conversation :
 {memory}
@@ -45,6 +50,13 @@ REMEMBER_TOOL = {
 }
 
 
+def build_tools() -> list[dict]:
+    tools = [REMEMBER_TOOL]
+    if CODE_EXEC_ENABLED:
+        tools.append(RUN_PYTHON_TOOL)
+    return tools
+
+
 def build_system_prompt(relevant_memories: list[str]) -> str:
     if relevant_memories:
         memory = "\n".join(f"- {m}" for m in relevant_memories)
@@ -57,6 +69,8 @@ def run_tool(name: str, tool_input: dict) -> str:
     if name == "remember":
         remember(tool_input["content"])
         return "Noté."
+    if name == "run_python":
+        return run_python(tool_input["code"], tool_input["purpose"])
     return f"Outil inconnu : {name}"
 
 
@@ -72,7 +86,7 @@ def handle_turn(client: anthropic.Anthropic, messages: list, user_text: str) -> 
             model=MODEL,
             max_tokens=2048,
             system=build_system_prompt(relevant_memories),
-            tools=[REMEMBER_TOOL],
+            tools=build_tools(),
             output_config={"effort": "medium"},
             messages=messages,
         ) as stream:
