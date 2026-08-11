@@ -4,11 +4,11 @@ Assistant personnel façon Jarvis. Nova vise, à terme, la voix (réveil + écou
 la mémoire long terme, le contrôle d'outils réels (domotique, code, web) et une interface
 HUD — construits couche par couche, chaque phase validée avant la suivante.
 
-## État actuel : Phase 4 — les mains (exécution de code)
+## État actuel : Phase 4 — les mains (code, web, Gmail)
 
 Un agent conversationnel propulsé par Claude, avec mémoire sémantique (ChromaDB), voix
-sortante locale (Piper), voix entrante (mot de réveil + reconnaissance vocale), et
-maintenant la capacité d'exécuter du code Python pour agir réellement.
+sortante locale (Piper), voix entrante (mot de réveil + reconnaissance vocale), et la
+capacité d'agir réellement : exécuter du code, chercher sur le web, lire ses emails.
 
 - **Mémoire** : `remember`/`recall` sémantiques ; journal lisible dans `memory/notes.md`.
 - **Voix sortante** : Piper (local, rapide — ~6s pour une réponse courte, pas de GPU
@@ -21,7 +21,13 @@ maintenant la capacité d'exécuter du code Python pour agir réellement.
   calculs, manipulations de fichiers, etc. **Aucune sandbox** — le code tourne avec les
   mêmes droits qu'elle-même — donc chaque exécution demande une confirmation explicite
   dans le terminal avant de tourner. `NOVA_CODE_EXEC=off` pour désactiver entièrement.
-- ElevenLabs, Home Assistant et les serveurs MCP restent des options futures non branchées.
+- **Recherche web** : outil serveur natif de Claude (`web_search`), aucune config requise.
+  `NOVA_WEB_SEARCH=off` pour désactiver.
+- **Gmail** : `list_emails`/`read_email`, en lecture seule (scope `gmail.readonly` — Nova
+  ne peut ni envoyer ni supprimer). Nécessite `gmail_credentials.json` à la racine (voir
+  Configuration Gmail ci-dessous) ; sans ce fichier, les outils sont simplement absents.
+- ElevenLabs, Home Assistant et les autres serveurs MCP restent des options futures non
+  branchées.
 
 ### Lancer Nova
 
@@ -43,8 +49,21 @@ voix/mémoire tournent hors-ligne) :
 
 **Ce qui n'est jamais hors-ligne** : chaque tour de conversation part vers l'API Claude
 (`client.messages.stream`, dans `nova/agent.py`) — ça demande une connexion réseau et
-`ANTHROPIC_API_KEY` à chaque fois. Seuls la mémoire, la synthèse vocale, le mot de
-réveil et la transcription tournent localement.
+`ANTHROPIC_API_KEY` à chaque fois. Web search tourne aussi côté serveur Anthropic. Seuls
+la mémoire, la synthèse vocale, le mot de réveil et la transcription tournent localement.
+
+### Configuration Gmail
+
+1. Sur [console.cloud.google.com](https://console.cloud.google.com) : active l'API Gmail
+   (APIs & Services → Library), configure l'écran de consentement OAuth en type
+   **Externe** (pas Interne — "Interne" ne marche que pour un compte Google Workspace
+   d'entreprise, il bloquera même le propriétaire sur un compte Gmail perso) avec ton
+   email en test user, puis crée un identifiant OAuth de type **Desktop app**.
+2. Télécharge le JSON, renomme-le `gmail_credentials.json`, dépose-le à la racine du
+   projet (déjà dans `.gitignore` — jamais commité).
+3. Au premier appel d'un outil Gmail, une fenêtre de navigateur s'ouvre pour
+   l'autorisation ; le token est ensuite mis en cache dans `.gmail_token.json`
+   (auto-renouvelé, aussi gitignored) et réutilisé sans re-demander.
 
 ### Voix — Piper vs XTTS-v2
 
@@ -81,6 +100,9 @@ Les deux ont été mis de côté volontairement pour avancer sur la Phase 4 — 
   garde-fou est la confirmation manuelle avant chaque exécution (`nova/code_exec.py`).
   Ne pas confirmer un code dont l'effet n'est pas clair. Timeout de 30s, sortie tronquée
   à 3000 caractères.
+- **Gmail est en lecture seule par choix** (`SCOPES` dans `nova/gmail.py` — juste
+  `gmail.readonly`), pas parce que l'API ne permet pas plus. Étendre les scopes (envoi,
+  suppression) demanderait de repasser par l'écran de consentement OAuth.
 - **Le micro par défaut de Windows n'est pas forcément le bon** : sur cette machine,
   `sounddevice`/PortAudio résolvait le périphérique par défaut vers la variante **MME**
   du micro (l'API audio la plus ancienne de Windows), qui contourne le traitement DSP
@@ -116,6 +138,6 @@ Les deux ont été mis de côté volontairement pour avancer sur la Phase 4 — 
 - [x] **Phase 1** — Mémoire vectorielle (ChromaDB)
 - [x] **Phase 2** — Voix sortante (Piper local ; XTTS-v2 et ElevenLabs en options)
 - [x] **Phase 3** — Voix entrante (wake word "Hey Jarvis" + faster-whisper)
-- [x] **Phase 4** — Les mains : exécution de code (`run_python`, avec confirmation)
+- [x] **Phase 4** — Les mains : exécution de code, recherche web, Gmail (lecture seule)
 - [ ] **Phase 5** — Interface HUD (Electron/Tauri)
 - [ ] **Phase 6** — Orchestration temps réel avec interruption (LiveKit/Pipecat)
