@@ -3,7 +3,7 @@ import sys
 import anthropic
 
 from .config import MODEL
-from .memory import append_memory, load_memory
+from .memory import recall, remember
 
 if sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
@@ -17,7 +17,7 @@ Réponds en français sauf si on te parle dans une autre langue.
 Utilise l'outil `remember` quand l'utilisateur partage une préférence, un fait durable \
 ou une décision qui vaut la peine d'être retenue pour les prochaines conversations.
 
-Notes retenues jusqu'ici :
+Souvenirs pertinents pour cette conversation :
 {memory}
 """
 
@@ -41,14 +41,17 @@ REMEMBER_TOOL = {
 }
 
 
-def build_system_prompt() -> str:
-    memory = load_memory().strip() or "(aucune note pour l'instant)"
+def build_system_prompt(relevant_memories: list[str]) -> str:
+    if relevant_memories:
+        memory = "\n".join(f"- {m}" for m in relevant_memories)
+    else:
+        memory = "(aucun souvenir pertinent pour cette conversation)"
     return SYSTEM_PROMPT_TEMPLATE.format(memory=memory)
 
 
 def run_tool(name: str, tool_input: dict) -> str:
     if name == "remember":
-        append_memory(tool_input["content"])
+        remember(tool_input["content"])
         return "Noté."
     return f"Outil inconnu : {name}"
 
@@ -67,12 +70,13 @@ def chat() -> None:
             break
 
         messages.append({"role": "user", "content": user_input})
+        relevant_memories = recall(user_input)
 
         while True:
             with client.messages.stream(
                 model=MODEL,
                 max_tokens=2048,
-                system=build_system_prompt(),
+                system=build_system_prompt(relevant_memories),
                 tools=[REMEMBER_TOOL],
                 output_config={"effort": "medium"},
                 messages=messages,
